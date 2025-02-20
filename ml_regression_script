@@ -1,0 +1,234 @@
+"""
+Predictive Analysis of Vehicle Pricing Using Machine Learning: An Application of Extremely Randomized Trees Regressor on Adapted Car Advertisement Data
+August 21, 2024
+Kabirat Nasiru
+"""
+"""
+Using the data adapted from Huang et al. (2021), we willconsider the vehicle models C3, DS3, Grande Punto, and Panda, 
+only the hatchback body type, using either petrol or diesel fuel types, 
+and the five most frequently advertised colors of these vehicles
+Huang et al. (2021) provided the foundational dataset, which was meticulously adapted to focus on specific vehicle models, types, 
+and features relevant to this analysis.
+
+SUMMARY:
+This script performs the following steps:
+1. **Data Cleaning**: Filter the dataset by specific criteria and handle missing values based on the objectives provided.
+2. **Data Preparation**: Prepare the data for machine learning by selecting relevant columns and converting data types.
+3. **Model Training and Evaluation**: Train a machine learning model to predict car prices and evaluate its performance.
+4. **Analysis and Visualization**: Analyze feature importance and visualize the model's performance.
+
+"""
+# STEP 1 : # IMPORT ALL THE NECESSARY LIBRARIES
+# This stage focuses on filtering, transforming, and preparing the dataset for analysis.
+# It ensures that the data is consistent, accurate, and ready for model training.
+import pyreadr
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import make_column_transformer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.pipeline import Pipeline
+from sklearn import metrics
+from sklearn.inspection import permutation_importance
+import seaborn as sns
+
+# STEP 2 DATA CLEANING FOR DATASET
+# This stage focuses on filtering, transforming, and preparing the dataset for analysis.
+# Load the dataset
+carAd_file = pyreadr.read_r("car_ads_fp.RData")
+carAd = carAd_file["carAd"]
+carAd = pd.DataFrame(carAd)  # Convert to a pandas DataFrame
+carAd.reset_index(drop=True, inplace=True)
+
+# Filter the dataset by the specified vehicle models
+specified_models = ['C3', 'DS3', 'Grande Punto', 'Panda']
+filtered_data_model = carAd[carAd['Genmodel'].isin(specified_models)]
+#print(f"\nStep 2: Filtered by specified models\nNumber of observations: {filtered_data_model.shape[0]}")
+#print(filtered_data_model.head())
+
+# Filter for only hatchback body types
+filtered_specified_bodytype = filtered_data_model[filtered_data_model['Bodytype'].isin(['Hatchback'])]
+#print(f"\nStep 3: Filtered by specified body type (Hatchback)\nNumber of observations: {filtered_specified_bodytype.shape[0]}")
+#print(filtered_specified_bodytype.head())
+
+# Filter to only show rows with "Manual" in the Gearbox column
+filtered_gearbox_manual = filtered_specified_bodytype[filtered_specified_bodytype['Gearbox'] == 'Manual']
+#print(f"\nStep 4: Filtered by Gearbox (Manual only)\nNumber of observations: {filtered_gearbox_manual.shape[0]}")
+#print(filtered_gearbox_manual.head())
+
+# Further filter for specified fuel types (Petrol, Diesel)
+fuel_types = ['Diesel', 'Petrol']
+filtered_fuel_types = filtered_gearbox_manual[filtered_gearbox_manual['Fuel_type'].isin(fuel_types)]
+#print(f"\nStep 5: Filtered by specified fuel types (Diesel, Petrol)\nNumber of observations: {filtered_fuel_types.shape[0]}")
+#print(filtered_fuel_types.head())
+
+# Filter by the top 5 most frequent colors
+top_5_colors = ['Blue', 'Grey', 'Black', 'Red', 'White']
+filtered_result_model = filtered_fuel_types[filtered_fuel_types['Color'].isin(top_5_colors)]
+#print(f"\nStep 6: Filtered by top 5 colors\nNumber of observations: {filtered_result_model.shape[0]}")
+#print(filtered_result_model.head())
+
+# Fill missing 'Seat_num' with the mode (most common value)
+mode_seat_num = filtered_result_model['Seat_num'].mode()[0]
+filtered_result_model.loc[:, 'Seat_num'] = filtered_result_model['Seat_num'].fillna(mode_seat_num)
+#print(f"\nStep 7: Filled missing 'Seat_num' with the mode: {mode_seat_num}\nNumber of observations: {filtered_result_model.shape[0]}")
+#print(filtered_result_model.head())
+
+# Drop unnecessary columns
+drop_columns = ['Genmodel_ID', 'Adv_ID', 'Adv_year', 'Adv_month', 'Reg_year', 'Engin_size', 'Door_num', 'Gearbox', 'Bodytype', 'Maker']
+filtered_result_model = filtered_result_model.drop(columns=drop_columns, errors='ignore')
+#print(f"\nStep 8: Dropped specified columns\nNumber of observations: {filtered_result_model.shape[0]}")
+#print(filtered_result_model.head())
+
+# Convert specified columns to numeric types
+filtered_result_model['Price'] = pd.to_numeric(filtered_result_model['Price'], errors='coerce')
+filtered_result_model['Seat_num'] = pd.to_numeric(filtered_result_model['Seat_num'], errors='coerce')
+filtered_result_model['Runned_Miles'] = pd.to_numeric(filtered_result_model['Runned_Miles'], errors='coerce')
+
+# STEP 3 VISUALIZATION AND ANALYSIS
+# Additional visualizations to display frequency statistics, bar charts, histograms, and distributions:
+
+# Visualization 1: Frequency of Colors
+plt.figure(figsize=(8, 4))
+sns.countplot(x='Color', data=filtered_result_model, order=top_5_colors)
+plt.title('Frequency of Car Colors')
+plt.xlabel('Color')
+plt.ylabel('Frequency')
+plt.show()
+
+# Visualization 2: Distribution of Runned Miles
+plt.figure(figsize=(8, 4))
+sns.histplot(filtered_result_model['Runned_Miles'], bins=30, kde=True)
+plt.title('Distribution of Runned Miles')
+plt.xlabel('Runned Miles')
+plt.ylabel('Frequency')
+plt.show()
+
+
+# Visualization 3: Pair Plot
+sns.pairplot(filtered_result_model)
+plt.suptitle('Pair Plot of Features', y=1.02)
+plt.show()
+
+# Visualization 4: Distribution of Prices, this visualization helps to understand the spread and skewness of the price data.
+plt.figure(figsize=(10, 6))
+sns.histplot(filtered_result_model['Price'], kde=True, bins=30)
+plt.title('Distribution of Car Prices')
+plt.xlabel('Price')
+plt.ylabel('Frequency')
+plt.show()
+
+# Visualization 5: Box Plot of Prices by Fuel Type
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='Fuel_type', y='Price', data=filtered_result_model)
+plt.title('Box Plot of Car Prices by Fuel Type')
+plt.xlabel('Fuel Type')
+plt.ylabel('Price')
+plt.show()
+
+# Visualization 6: Box Plot of Prices by Color
+plt.figure(figsize=(12, 6))
+sns.boxplot(x='Color', y='Price', data=filtered_result_model)
+plt.title('Box Plot of Car Prices by Color')
+plt.xlabel('Color')
+plt.ylabel('Price')
+plt.show()
+
+# Visualization 7: Scatter Plot of Price vs. Runned Miles
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x='Runned_Miles', y='Price', data=filtered_result_model, hue='Fuel_type')
+plt.title('Scatter Plot of Price vs. Runned Miles')
+plt.xlabel('Runned Miles')
+plt.ylabel('Price')
+plt.show()
+
+
+# Convert specified columns to numeric types
+filtered_result_model['Price'] = pd.to_numeric(filtered_result_model['Price'], errors='coerce')
+filtered_result_model['Seat_num'] = pd.to_numeric(filtered_result_model['Seat_num'], errors='coerce')
+filtered_result_model['Runned_Miles'] = pd.to_numeric(filtered_result_model['Runned_Miles'], errors='coerce')
+
+#STEP 4 DATA PREPARATION
+# Set up one-hot encoding and initialize the model
+objs = filtered_result_model.select_dtypes(include='object').columns.tolist()
+ohe = OneHotEncoder() 
+cTrans = make_column_transformer((ohe, objs), remainder="passthrough")
+etr = ExtraTreesRegressor(random_state=75, max_features=None, verbose=1)
+
+#STEP 5 MODEL TRAINING AND EVALUATION (ASSESSING PERFORMANCE)
+#Data preprocessing, model setup, and train-test split
+cTrans.fit(filtered_result_model)
+pipe = Pipeline(steps=[('ctrf', cTrans), ('model', etr)])
+
+target_col = 'Price'
+X = filtered_result_model.drop(target_col, axis=1)
+Y = filtered_result_model[target_col]
+
+X = X.dropna()
+Y = Y.loc[X.index]
+
+# Stratify by 'Genmodel' to maintain balance across classes during the split
+x, testX, y, testY = train_test_split(X, Y, test_size=0.3, stratify=X["Genmodel"], random_state=1)
+
+# Train the model
+pipe.fit(x, y)
+print("R\N{SUPERSCRIPT TWO} =", pipe.score(x, y))
+trPr = pipe.predict(x)
+print("RMSE =", metrics.mean_squared_error(y, trPr, squared=False))
+
+pred = pipe.predict(testX)
+print("R\N{SUPERSCRIPT TWO} =", metrics.explained_variance_score(testY, pred))
+print("RMSE =", metrics.mean_squared_error(testY, pred, squared=False))
+
+# STEP 6 VISUALIZING THE TESTING PERFORMANCE:IMPORTANCE VISUALIZATION (TABLES AND FEATURES)
+# Visualize testing performance
+fig, ax = plt.subplots()
+ax.scatter(pred, testY, edgecolors=(0,0,1))
+ax.plot([testY.min(), testY.max()], [testY.min(), testY.max()], 'r--', lw=3)
+ax.set_xlabel('Predicted Values')
+ax.set_ylabel('Actual Values')
+plt.show()
+
+# Extract feature importances, categories, and independent variable names
+imps = pipe.named_steps["model"].feature_importances_
+one_hot_encoder = pipe.named_steps['ctrf'].named_transformers_['onehotencoder']
+one_hot_cat = one_hot_encoder.categories_
+
+# Get a list of all independent variable column names excluding the target 'Price'
+indeps = filtered_result_model.drop(columns=["Price"]).columns.tolist()
+features = []
+for each in indeps:
+    if each in objs:  
+        spot = objs.index(each)
+        one_hot_mess = [each + "_" + str(what) for what in one_hot_cat[spot]]
+        features.extend(one_hot_mess)
+    else:
+        features.append(each)
+
+print("Generated Features List:", features)
+
+# Create a DataFrame to store features and their importance
+influencers = pd.DataFrame({"Features": features, "Importance": imps}).sort_values(by="Importance", ascending=False)
+print("Feature Importances:\n", influencers)
+
+# Compute and sort permutation feature importances for the model
+perm_imps = permutation_importance(pipe, x, y, n_repeats=5, random_state=1)
+perm_sorts = perm_imps.importances_mean.argsort()
+print(perm_imps.importances[perm_sorts])
+indices = np.arange(0, len(imps)) + 0.5
+perms_df = pd.DataFrame({"Features": indeps, "Permutation": perm_imps.importances_mean}).sort_values(by = "Permutation",ascending = False)
+
+# Feature importance bar plot
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 8))
+reversed_names = influencers["Features"].tolist()[::-1]
+ax1.barh(indices, imps[np.argsort(imps)], height = 0.7)
+ax1.set_yticks(indices)
+ax1.set_yticklabels(reversed_names)
+ax1.set_ylim((0, len(imps)))
+ax2.boxplot(perm_imps.importances[perm_sorts].T,vert = False, labels = perms_df["Features"].tolist(),patch_artist = True, 
+            boxprops = {'color': "black", 'edgecolor': "black"})
+fig.tight_layout()
+plt.show(block = True) 
+
