@@ -1,7 +1,6 @@
 """
 Predictive Analysis of Vehicle Pricing Using Machine Learning: An Application of Extremely Randomized Trees Regressor on Adapted Car Advertisement Data
-August 21, 2024
-Kabirat Nasiru
+
 """
 """
 Using the data adapted from Huang et al. (2021), we willconsider the vehicle models C3, DS3, Grande Punto, and Panda, 
